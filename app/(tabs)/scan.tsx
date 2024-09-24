@@ -1,19 +1,36 @@
 import { Ionicons } from '@expo/vector-icons';
+import { RouteProp, useNavigation, useRoute } from '@react-navigation/native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { useRouter } from 'expo-router';
-import React, { useRef, useState } from 'react';
-import { Dimensions, FlatList, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import React, { useEffect, useRef, useState } from 'react';
+import { Dimensions, FlatList, Image, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+
+// Define the type for the route parameters
+export type RootStackParamList = {
+  ScanScreen: { photoUri?: string };
+  CameraScreen: undefined;
+};
+
+type ScanScreenRouteProp = RouteProp<RootStackParamList, 'ScanScreen'>;
 
 const { width: screenWidth } = Dimensions.get('window');
 const itemWidth = screenWidth * 0.7;
 const sideMargin = screenWidth * 0.15;
 
 export default function ScanScreen() {
-  const router = useRouter();
+  const navigation = useNavigation();
+  const route = useRoute<ScanScreenRouteProp>();
+  const [photoUri, setPhotoUri] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState('Body scan');
   const [activePage, setActivePage] = useState(0);
   const flatListRef = useRef<FlatList>(null);
+
+  useEffect(() => {
+    const params = route.params;
+    if (params?.photoUri) {
+      setPhotoUri(params.photoUri);
+    }
+  }, [route]);
 
   const bodyScanItems = [
     { id: 1, colors: ['#4c669f', '#3b5998', '#192f6a'], title: 'Full Body Scan' },
@@ -41,7 +58,7 @@ export default function ScanScreen() {
         >
           <Text style={styles.scanItemTitle}>{item.title}</Text>
           <Text style={styles.scanItemSubtitle}>Get your ratings and recommendations</Text>
-          <TouchableOpacity style={styles.button} onPress={() => router.push('/CameraScreen')}>
+          <TouchableOpacity style={styles.button} onPress={() => navigation.navigate('CameraScreen' as never)}>
             <Text style={styles.buttonText}>Begin scan</Text>
           </TouchableOpacity>
         </LinearGradient>
@@ -121,6 +138,12 @@ export default function ScanScreen() {
         ? renderCarousel(bodyScanItems, renderBodyScanItem)
         : renderCarousel(youAs10Items, renderYouAs10Item)
       }
+
+      {photoUri && (
+        <View style={styles.photoContainer}>
+          <Image source={{ uri: photoUri }} style={styles.photo} />
+        </View>
+      )}
     </SafeAreaView>
   );
 }
@@ -236,5 +259,19 @@ const styles = StyleSheet.create({
   },
   paginationDotActive: {
     backgroundColor: '#fff',
+  },
+  photoContainer: {
+    position: 'absolute',
+    bottom: 20,
+    left: '50%',
+    transform: [{ translateX: '-50%' }],
+    width: 100,
+    height: 100,
+    borderRadius: 10,
+    overflow: 'hidden',
+  },
+  photo: {
+    width: '100%',
+    height: '100%',
   },
 });

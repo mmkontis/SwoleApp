@@ -1,37 +1,63 @@
+import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { Tabs } from 'expo-router';
-import React from 'react';
-
-import { TabBarIcon } from '@/components/navigation/TabBarIcon';
-import { Colors } from '@/constants/Colors';
-import { useColorScheme } from '@/hooks/useColorScheme';
+import { StyleSheet } from 'react-native';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 export default function TabLayout() {
-  const colorScheme = useColorScheme();
-
   return (
-    <Tabs
-      screenOptions={{
-        tabBarActiveTintColor: Colors[colorScheme ?? 'light'].tint,
-        headerShown: false,
-      }}>
-      <Tabs.Screen
-        name="index"
-        options={{
-          title: 'Home',
-          tabBarIcon: ({ color, focused }) => (
-            <TabBarIcon name={focused ? 'home' : 'home-outline'} color={color} />
-          ),
+    <SafeAreaProvider>
+      <Tabs 
+        initialRouteName="scan"
+        screenOptions={{
+          headerShown: false,  // Change this line
+          tabBarStyle: styles.tabBar,
+          tabBarActiveTintColor: '#fff',
+          tabBarInactiveTintColor: '#666',
+          tabBarShowLabel: true,
+          tabBarLabelStyle: styles.tabBarLabel,
         }}
-      />
-      <Tabs.Screen
-        name="explore"
-        options={{
-          title: 'Explore',
-          tabBarIcon: ({ color, focused }) => (
-            <TabBarIcon name={focused ? 'code-slash' : 'code-slash-outline'} color={color} />
-          ),
-        }}
-      />
-    </Tabs>
+      >
+        <Tabs.Screen
+          name="scan"
+          options={{
+            title: 'scan',
+            tabBarIcon: ({ color, size }) => (
+              <MaterialCommunityIcons name="crop-free" size={size} color={color} />
+            ),
+          }}
+        />
+        <Tabs.Screen
+          name="daily"
+          options={{
+            title: 'daily',
+            tabBarIcon: ({ color, size }) => (
+              <Ionicons name="checkmark-circle-outline" size={size} color={color} />
+            ),
+          }}
+        />
+        <Tabs.Screen
+          name="coach"
+          options={{
+            title: 'coach',
+            tabBarIcon: ({ color, size }) => (
+              <Ionicons name="chatbubble-ellipses-outline" size={size} color={color} />
+            ),
+          }}
+        />
+      </Tabs>
+    </SafeAreaProvider>
   );
 }
+
+const styles = StyleSheet.create({
+  tabBar: {
+    backgroundColor: '#000',
+    borderTopWidth: 0,
+    height: 60,
+    paddingBottom: 5,
+  },
+  tabBarLabel: {
+    fontSize: 12,
+    fontWeight: '400',
+  },
+});
