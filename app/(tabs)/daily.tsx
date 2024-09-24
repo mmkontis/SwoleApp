@@ -1,11 +1,10 @@
 import { Ionicons } from '@expo/vector-icons';
+import { useNavigation } from '@react-navigation/native';
 import { LinearGradient } from 'expo-linear-gradient';
 import React, { useState } from 'react';
 import { Dimensions, Image, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import BottomSheet from '../../components/BottomSheet';
-// import BottomSheetContent from '../../components/BottomSheetContent'; // Removed as it's not needed
-import OnboardingScreen from '../../components/OnboardingScreen'; // Ensure this path is correct
-import SubscriptionPopup from '../../components/SubscriptionPopup'; // Ensure this path is correct
+import SubscriptionPopup from '../../components/SubscriptionPopup';
 
 const goalData = {
   arms: { score: 85, explanation: "Well-defined and muscular arms." },
@@ -40,19 +39,29 @@ type Metric = {
 };
 
 export default function DailyScreen() {
+  const navigation = useNavigation();
   const [isBottomSheetVisible, setBottomSheetVisible] = useState(false);
-  const [bottomSheetContent, setBottomSheetContent] = useState<'settings' | 'other' | 'onboarding' | 'subscription'>('settings');
+  const [bottomSheetContent, setBottomSheetContent] = useState<'settings' | 'other' | 'subscription'>('settings');
   const [selectedMetric, setSelectedMetric] = useState<Metric | null>(null);
+  const [isSubscriptionPopupVisible, setSubscriptionPopupVisible] = useState(false);
   const goalEntries = Object.entries(goalData);
 
-  const handleOpenBottomSheet = (type: 'settings' | 'other' | 'onboarding' | 'subscription', metric: Metric | null = null) => {
-    setBottomSheetContent(type);
-    setSelectedMetric(metric);
-    setBottomSheetVisible(true);
+  const handleOpenBottomSheet = (type: 'settings' | 'other' | 'subscription', metric: Metric | null = null) => {
+    if (type === 'subscription') {
+      setSubscriptionPopupVisible(true);
+    } else {
+      setBottomSheetContent(type);
+      setSelectedMetric(metric);
+      setBottomSheetVisible(true);
+    }
   };
 
   const handleCloseBottomSheet = () => {
     setBottomSheetVisible(false);
+  };
+
+  const handleCloseSubscriptionPopup = () => {
+    setSubscriptionPopupVisible(false);
   };
 
   return (
@@ -117,10 +126,10 @@ export default function DailyScreen() {
           ))}
         </View>
 
-        {/* Add buttons for OnboardingScreen and SubscriptionPopup */}
+        {/* Add button for OnboardingScreen */}
         <TouchableOpacity
           style={styles.button}
-          onPress={() => handleOpenBottomSheet('onboarding')}
+          onPress={() => navigation.navigate('Onboarding')}
         >
           <Text style={styles.buttonText}>Open Onboarding</Text>
         </TouchableOpacity>
@@ -136,15 +145,12 @@ export default function DailyScreen() {
         onClose={handleCloseBottomSheet}
       >
         {bottomSheetContent === 'settings' ? (
-          // <BottomSheetContent type="settings" onClose={handleCloseBottomSheet} /> // Removed as it's not needed
           <View style={styles.metricDetailContainer}>
             <Text style={styles.metricDetailTitle}>Settings</Text>
             {/* Add your settings content here */}
           </View>
-        ) : bottomSheetContent === 'onboarding' ? (
-          <OnboardingScreen />
         ) : bottomSheetContent === 'subscription' ? (
-          <SubscriptionPopup />
+          <SubscriptionPopup onClose={handleCloseSubscriptionPopup} />
         ) : (
           selectedMetric && (
             <View style={styles.metricDetailContainer}>
@@ -155,6 +161,9 @@ export default function DailyScreen() {
           )
         )}
       </BottomSheet>
+      {isSubscriptionPopupVisible && (
+        <SubscriptionPopup onClose={handleCloseSubscriptionPopup} />
+      )}
     </View>
   );
 }
@@ -174,7 +183,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 20,
     marginTop: 20, // Added top margin
-
   },
   streakContainer: {
     flex: 1,

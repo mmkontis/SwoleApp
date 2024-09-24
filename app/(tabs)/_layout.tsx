@@ -9,7 +9,7 @@ export default function TabLayout() {
       <Tabs 
         initialRouteName="scan"
         screenOptions={{
-          headerShown: false,  // Change this line
+          headerShown: false,
           tabBarStyle: styles.tabBar,
           tabBarActiveTintColor: '#fff',
           tabBarInactiveTintColor: '#666',
