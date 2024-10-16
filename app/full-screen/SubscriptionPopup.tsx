@@ -1,12 +1,19 @@
+import { useRouter } from 'expo-router';
 import React from 'react';
-import { Dimensions, Linking, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Linking, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
-const { height: windowHeight, width: windowWidth } = Dimensions.get('window');
+interface SubscriptionPopupProps {}
 
-const SubscriptionPopup = ({ onClose }) => {
+const SubscriptionPopup: React.FC<SubscriptionPopupProps> = () => {
+  const router = useRouter();
+
+  const handleClose = () => {
+    router.back();
+  };
+
   return (
     <View style={styles.container}>
-      <TouchableOpacity style={styles.closeButton} onPress={onClose}>
+      <TouchableOpacity onPress={handleClose} style={styles.closeButton}>
         <Text style={styles.closeButtonText}>X</Text>
       </TouchableOpacity>
       <View style={styles.content}>
@@ -55,25 +62,22 @@ const SubscriptionPopup = ({ onClose }) => {
 
 const styles = StyleSheet.create({
   container: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
+    flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: 'rgba(0, 0, 0, 1)',
+    backgroundColor: 'rgba(0, 0, 0, 0.9)',
   },
   closeButton: {
     position: 'absolute',
     top: 40,
-    left: 20,
+    right: 20,
     width: 40,
     height: 40,
     borderRadius: 20,
     backgroundColor: 'rgba(255, 255, 255, 0.3)',
     justifyContent: 'center',
     alignItems: 'center',
+    zIndex: 1,
   },
   closeButtonText: {
     color: '#fff',
@@ -81,18 +85,11 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
   },
   content: {
-    position: 'relative',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    justifyContent: 'center',
-    alignItems: 'center',
     backgroundColor: '#000',
     padding: 20,
     borderRadius: 10,
     width: '90%',
-    
+    alignItems: 'center',
   },
   title: {
     fontSize: 24,

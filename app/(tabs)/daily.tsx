@@ -1,10 +1,11 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
+import { StackNavigationProp } from '@react-navigation/stack';
 import { LinearGradient } from 'expo-linear-gradient';
-import React, { useState } from 'react';
+import { Link, useRouter } from 'expo-router';
+import React, { useMemo, useState } from 'react';
 import { Dimensions, Image, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import BottomSheet from '../../components/BottomSheet';
-import SubscriptionPopup from '../../components/SubscriptionPopup';
 
 const goalData = {
   arms: { score: 85, explanation: "Well-defined and muscular arms." },
@@ -38,19 +39,40 @@ type Metric = {
   };
 };
 
+// Define the RootStackParamList type
+type RootStackParamList = {
+  Onboarding: undefined;
+  // Add other screen names and their params here
+};
+
+// Update the type of navigation
+type NavigationProp = StackNavigationProp<RootStackParamList>;
+
+type SortOption = 'alphabetical' | 'score';
+
 export default function DailyScreen() {
-  const navigation = useNavigation();
+  const navigation = useNavigation<NavigationProp>();
+  const router = useRouter(); // Added router
   const [isBottomSheetVisible, setBottomSheetVisible] = useState(false);
-  const [bottomSheetContent, setBottomSheetContent] = useState<'settings' | 'other' | 'subscription'>('settings');
   const [selectedMetric, setSelectedMetric] = useState<Metric | null>(null);
-  const [isSubscriptionPopupVisible, setSubscriptionPopupVisible] = useState(false);
+
   const goalEntries = Object.entries(goalData);
+  const [sortOption, setSortOption] = useState<SortOption>('alphabetical');
+
+  const sortedGoalEntries = useMemo(() => {
+    return Object.entries(goalData).sort((a, b) => {
+      if (sortOption === 'alphabetical') {
+        return a[0].localeCompare(b[0]);
+      } else {
+        return (b[1].score || 0) - (a[1].score || 0);
+      }
+    });
+  }, [goalData, sortOption]);
 
   const handleOpenBottomSheet = (type: 'settings' | 'other' | 'subscription', metric: Metric | null = null) => {
     if (type === 'subscription') {
-      setSubscriptionPopupVisible(true);
+      router.push('/full-screen/SubscriptionPopup');
     } else {
-      setBottomSheetContent(type);
       setSelectedMetric(metric);
       setBottomSheetVisible(true);
     }
@@ -60,8 +82,13 @@ export default function DailyScreen() {
     setBottomSheetVisible(false);
   };
 
-  const handleCloseSubscriptionPopup = () => {
-    setSubscriptionPopupVisible(false);
+  const toggleSortOption = () => {
+    setSortOption(prev => prev === 'alphabetical' ? 'score' : 'alphabetical');
+  };
+
+  const handleOpenSubscription = () => {
+    // Navigate to the SubscriptionPopup screen instead of setting state
+    router.push('/full-screen/SubscriptionPopup');
   };
 
   return (
@@ -101,11 +128,21 @@ export default function DailyScreen() {
           <Text style={styles.routineText}>
             Scan to get your daily glow up routine
           </Text>
+          <Link href="../CameraScreen" asChild>
+            <TouchableOpacity style={styles.button}>
+              <Text style={styles.buttonText}>Take Photo</Text>
+            </TouchableOpacity>
+          </Link>
         </TouchableOpacity>
 
-        <Text style={styles.metricsTitle}>Your Metrics</Text>
+        <View style={styles.metricsHeader}>
+          <Text style={styles.metricsTitle}>Your Metrics</Text>
+          <TouchableOpacity onPress={toggleSortOption} style={styles.sortButton}>
+            <Ionicons name={sortOption === 'alphabetical' ? 'text' : 'stats-chart'} size={24} color="white" />
+          </TouchableOpacity>
+        </View>
         <View style={styles.metricsContainer}>
-          {goalEntries.map(([key, value]) => (
+          {sortedGoalEntries.map(([key, value]) => (
             <TouchableOpacity
               key={key}
               style={styles.metricItem}
@@ -133,9 +170,9 @@ export default function DailyScreen() {
         >
           <Text style={styles.buttonText}>Open Onboarding</Text>
         </TouchableOpacity>
-        <TouchableOpacity
+        <TouchableOpacity 
           style={styles.button}
-          onPress={() => handleOpenBottomSheet('subscription')}
+          onPress={handleOpenSubscription}
         >
           <Text style={styles.buttonText}>Open Subscription</Text>
         </TouchableOpacity>
@@ -144,26 +181,11 @@ export default function DailyScreen() {
         isVisible={isBottomSheetVisible}
         onClose={handleCloseBottomSheet}
       >
-        {bottomSheetContent === 'settings' ? (
-          <View style={styles.metricDetailContainer}>
-            <Text style={styles.metricDetailTitle}>Settings</Text>
-            {/* Add your settings content here */}
-          </View>
-        ) : bottomSheetContent === 'subscription' ? (
-          <SubscriptionPopup onClose={handleCloseSubscriptionPopup} />
-        ) : (
-          selectedMetric && (
-            <View style={styles.metricDetailContainer}>
-              <Text style={styles.metricDetailTitle}>{selectedMetric.key}</Text>
-              <Text style={styles.metricDetailScore}>{selectedMetric.value.score !== null ? selectedMetric.value.score : '-'}</Text>
-              <Text style={styles.metricDetailExplanation}>{selectedMetric.value.explanation}</Text>
-            </View>
-          )
-        )}
+        <View style={styles.metricDetailContainer}>
+          <Text style={styles.metricDetailTitle}>Settings</Text>
+          {/* Add your settings content here */}
+        </View>
       </BottomSheet>
-      {isSubscriptionPopupVisible && (
-        <SubscriptionPopup onClose={handleCloseSubscriptionPopup} />
-      )}
     </View>
   );
 }
@@ -244,6 +266,7 @@ const styles = StyleSheet.create({
   routineText: {
     color: 'white',
     fontSize: 16,
+    marginBottom: 10,
   },
   metricsTitle: {
     fontSize: 24,
@@ -324,5 +347,14 @@ const styles = StyleSheet.create({
     color: 'white',
     fontSize: 16,
     fontWeight: 'bold',
+  },
+  metricsHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 10,
+  },
+  sortButton: {
+    padding: 5,
   },
 });

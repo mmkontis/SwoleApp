@@ -1,8 +1,9 @@
 import { Ionicons } from '@expo/vector-icons';
 import { RouteProp, useNavigation, useRoute } from '@react-navigation/native';
 import { LinearGradient } from 'expo-linear-gradient';
+import { Link } from 'expo-router';
 import React, { useEffect, useRef, useState } from 'react';
-import { Dimensions, FlatList, Image, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Alert, Dimensions, FlatList, Image, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 // Define the type for the route parameters
@@ -29,8 +30,20 @@ export default function ScanScreen() {
     const params = route.params;
     if (params?.photoUri) {
       setPhotoUri(params.photoUri);
+      analyzeImage(params.photoUri);
     }
   }, [route]);
+
+  const analyzeImage = async (imageUri: string) => {
+    try {
+      const response = await fetch(`https://open-ai-image-test.vercel.app/api/analyze?image=${encodeURIComponent(imageUri)}`);
+      const data = await response.json();
+      Alert.alert('Image Analysis Result', JSON.stringify(data, null, 2));
+    } catch (error) {
+      console.error('Error analyzing image:', error);
+      Alert.alert('Error', 'Failed to analyze the image');
+    }
+  };
 
   const bodyScanItems = [
     { id: 1, colors: ['#4c669f', '#3b5998', '#192f6a'], title: 'Full Body Scan' },
@@ -58,10 +71,12 @@ export default function ScanScreen() {
         >
           <Text style={styles.scanItemTitle}>{item.title}</Text>
           <Text style={styles.scanItemSubtitle}>Get your ratings and recommendations</Text>
-          <TouchableOpacity style={styles.button} onPress={() => navigation.navigate('CameraScreen' as never)}>
-            <Text style={styles.buttonText}>Begin scan</Text>
-          </TouchableOpacity>
-        </LinearGradient>
+          <Link href="../CameraScreen" asChild>
+            <TouchableOpacity style={styles.button}>
+              <Text style={styles.buttonText}>Begin scan</Text>
+            </TouchableOpacity>
+          </Link>
+        </LinearGradient> 
       </View>
     );
   };
@@ -264,7 +279,6 @@ const styles = StyleSheet.create({
     position: 'absolute',
     bottom: 20,
     left: '50%',
-    transform: [{ translateX: '-50%' }],
     width: 100,
     height: 100,
     borderRadius: 10,

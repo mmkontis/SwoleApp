@@ -1,15 +1,9 @@
 import { Ionicons } from '@expo/vector-icons';
-import { useNavigation } from '@react-navigation/native';
-import { StackNavigationProp } from '@react-navigation/stack';
 import { BlurView } from 'expo-blur';
 import { CameraType, CameraView, FlashMode, useCameraPermissions } from 'expo-camera';
+import { Link, useRouter } from 'expo-router';
 import React, { useRef, useState } from 'react';
 import { Image, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-
-// Import the type for the route parameters
-import { RootStackParamList } from './(tabs)/scan'; // Adjust the import path as necessary
-
-type CameraScreenNavigationProp = StackNavigationProp<RootStackParamList, 'CameraScreen'>;
 
 export default function CameraScreen() {
   const [facing, setFacing] = useState<CameraType>('back');
@@ -17,7 +11,7 @@ export default function CameraScreen() {
   const [image, setImage] = useState<string | null>(null);
   const [permission, requestPermission] = useCameraPermissions();
   const cameraRef = useRef<CameraView>(null);
-  const navigation = useNavigation<CameraScreenNavigationProp>();
+  const router = useRouter();
 
   if (!permission) {
     return <View />;
@@ -52,12 +46,6 @@ export default function CameraScreen() {
       } catch (error) {
         console.log(error);
       }
-    }
-  }
-
-  async function savePicture() {
-    if (image) {
-      navigation.navigate('ScanScreen', { photoUri: image });
     }
   }
 
@@ -103,10 +91,12 @@ export default function CameraScreen() {
               </TouchableOpacity>
             </BlurView>
             <BlurView intensity={80} tint="dark" style={styles.imageButtonBlur}>
-              <TouchableOpacity onPress={savePicture} style={styles.imageButton}>
-                <Ionicons name="save" size={24} color="white" />
-                <Text style={styles.buttonText}>Save</Text>
-              </TouchableOpacity>
+              <Link href={{ pathname: "/(tabs)/scan", params: { photoUri: image } }} asChild>
+                <TouchableOpacity style={styles.imageButton}>
+                  <Ionicons name="save" size={24} color="white" />
+                  <Text style={styles.buttonText}>Save</Text>
+                </TouchableOpacity>
+              </Link>
             </BlurView>
           </View>
         </View>
@@ -114,6 +104,7 @@ export default function CameraScreen() {
     </View>
   );
 }
+
 
 const styles = StyleSheet.create({
   container: {
