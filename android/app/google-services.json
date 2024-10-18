@@ -1,0 +1,39 @@
+{
+  "project_info": {
+    "project_number": "1091064359251",
+    "project_id": "swoleapp-35035",
+    "storage_bucket": "swoleapp-35035.appspot.com"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:1091064359251:android:9cba8098ed95f25bc519a6",
+        "android_client_info": {
+          "package_name": "com.univation.swoleapp"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "1091064359251-o0p85ui4q2dcq5ii0jodm4qs4o7643pf.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDtaduHleqKw198BzEJ4Hpd83u7x_pbsI4"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "1091064359251-o0p85ui4q2dcq5ii0jodm4qs4o7643pf.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
