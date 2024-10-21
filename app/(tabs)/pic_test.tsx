@@ -22,11 +22,9 @@ export default function PicTestScreen() {
       // Compress the image
       const manipResult = await ImageManipulator.manipulateAsync(
         result.assets[0].uri,
-        [
-            
-        ], // Resize to width of 1000px, height will adjust automatically
+        [],
         { 
-          compress: 0.6, // 0 = max compression (lowest quality), 1 = no compression (highest quality)
+          compress: 0.6,
           format: ImageManipulator.SaveFormat.JPEG 
         }
       );
@@ -34,25 +32,25 @@ export default function PicTestScreen() {
     }
   };
 
-  const uploadToSupabase = async () => {
+  const uploadToSupabase = async (category: 'fullbody' | 'back' | 'legs') => {
     if (!image || !user) return;
 
     setUploading(true);
     try {
-      const publicUrl = await uploadImage(user.id, image, 'TEST');
-      console.log('Image uploaded successfully:', publicUrl);
+      const publicUrl = await uploadImage(user.id, image, category.toUpperCase());
+      console.log(`Image uploaded successfully to ${category}:`, publicUrl);
 
       // Get the current date
       const currentDate = new Date();
       const formattedDate = currentDate.toISOString().split('T')[0];
       // Update the day's entry with the image URL
-      await updateDayWithImage(formattedDate, 'fullbody', publicUrl as string);
+      await updateDayWithImage(formattedDate, category, publicUrl as string);
 
-      console.log('Day updated with image URL');
-      alert('Image uploaded and day updated successfully!');
+      console.log(`Day updated with ${category} image URL`);
+      alert(`Image uploaded and day updated successfully for ${category}!`);
     } catch (error) {
-      console.error('Error uploading image or updating day:', error);
-      alert('Failed to upload image or update day');
+      console.error(`Error uploading image or updating day for ${category}:`, error);
+      alert(`Failed to upload image or update day for ${category}`);
     } finally {
       setUploading(false);
     }
@@ -63,11 +61,23 @@ export default function PicTestScreen() {
       <Text style={styles.title}>Pic Test Upload Screen</Text>
       <Button title="Pick an image from camera roll" onPress={pickImage} />
       {image && <Image source={{ uri: image }} style={styles.image} />}
-      <Button
-        title="Upload to Supabase"
-        onPress={uploadToSupabase}
-        disabled={!image || uploading}
-      />
+      <View style={styles.buttonContainer}>
+        <Button
+          title="Upload to Fullbody"
+          onPress={() => uploadToSupabase('fullbody')}
+          disabled={!image || uploading}
+        />
+        <Button
+          title="Upload to Back"
+          onPress={() => uploadToSupabase('back')}
+          disabled={!image || uploading}
+        />
+        <Button
+          title="Upload to Legs"
+          onPress={() => uploadToSupabase('legs')}
+          disabled={!image || uploading}
+        />
+      </View>
     </View>
   );
 }
@@ -89,5 +99,8 @@ const styles = StyleSheet.create({
     height: 200,
     resizeMode: 'contain',
     marginVertical: 20,
+  },
+  buttonContainer: {
+    marginTop: 20,
   },
 });
