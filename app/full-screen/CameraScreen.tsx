@@ -1,22 +1,29 @@
 import { Ionicons } from '@expo/vector-icons';
 import { BlurView } from 'expo-blur';
 import { CameraType, CameraView, FlashMode, useCameraPermissions } from 'expo-camera';
-import { Link, useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useRef, useState } from 'react';
-import { Image, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Alert, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+
+const PLACEHOLDERS = ["Full body", "Back", "Legs"];
 
 export default function CameraScreen() {
   const [facing, setFacing] = useState<CameraType>('back');
   const [flash, setFlash] = useState<FlashMode>('off');
-  const [image, setImage] = useState<string | null>(null);
+  const [images, setImages] = useState<string[]>([]);
   const [permission, requestPermission] = useCameraPermissions();
   const cameraRef = useRef<CameraView>(null);
   const router = useRouter();
+  const params = useLocalSearchParams();
+  const { scanType, onCapture: onCaptureString } = params as { scanType: string, onCapture: string };
+  const onCapture = onCaptureString ? JSON.parse(onCaptureString) : undefined;
+
+  console.log('CameraScreen rendered', { images, scanType });
 
   if (!permission) {
     return <View />;
   }
-
+ 
   if (!permission.granted) {
     return (
       <View style={styles.container}>
@@ -36,75 +43,72 @@ export default function CameraScreen() {
     setFlash(current => (current === 'off' ? 'on' : 'off'));
   }
 
-  async function takePicture() {
+  const takePicture = async () => {
     if (cameraRef.current) {
       try {
+        console.log('Taking picture...');
         const photo = await cameraRef.current.takePictureAsync();
-        if (photo) {
-          setImage(photo.uri);
+        console.log('Picture taken:', photo);
+        if (photo && onCapture && typeof onCapture === 'function') {
+          console.log('Calling onCapture function...');
+          await onCapture(photo.uri);
+          console.log('onCapture function called successfully');
+        } else {
+          console.error('onCapture is not a function or photo is undefined', { photo, onCapture });
         }
+        router.back();
       } catch (error) {
-        console.log(error);
+        console.error('Error taking picture:', error);
+        Alert.alert('Error', 'Failed to take picture: ' + (error as Error).message);
       }
+    } else {
+      console.error('Camera ref is null');
     }
+  };
+
+  function handleSkip() {
+    console.log('Skipping, navigating back');
+    router.back();
   }
 
   return (
     <View style={styles.container}>
-      {!image ? (
-        <CameraView
-          ref={cameraRef}
-          style={styles.camera}
-          facing={facing}
-          flash={flash}
-        >
-          <View style={styles.controlsContainer}>
-            <View style={styles.topControls}>
-              <BlurView intensity={80} tint="dark" style={styles.buttonBlur}>
-                <TouchableOpacity onPress={toggleCameraFacing}>
-                  <Ionicons name="camera-reverse" size={24} color="white" />
-                </TouchableOpacity>
-              </BlurView>
-              <BlurView intensity={80} tint="dark" style={styles.buttonBlur}>
-                <TouchableOpacity onPress={toggleFlash}>
-                  <Ionicons name={flash === 'on' ? "flash" : "flash-off"} size={24} color="white" />
-                </TouchableOpacity>
-              </BlurView>
-            </View>
+      <CameraView
+        ref={cameraRef}
+        style={styles.camera}
+        facing={facing}
+        flash={flash}
+      >
+        <View style={styles.controlsContainer}>
+          <View style={styles.placeholderContainer}>
+            <Text style={styles.placeholderText}>
+              {`Pic ${images.length + 1}/3: ${PLACEHOLDERS[images.length]}`}
+            </Text>
+          </View>
+          {images.length > 0 && (
+            <TouchableOpacity onPress={handleSkip} style={styles.skipButton}>
+              <Text style={styles.skipButtonText}>Skip</Text>
+              <Ionicons name="chevron-forward" size={18} color="white" />
+            </TouchableOpacity>
+          )}
+          <BlurView intensity={80} tint="dark" style={styles.bottomControlsBlur}>
             <View style={styles.bottomControls}>
-              <BlurView intensity={80} tint="dark" style={styles.captureButtonBlur}>
-                <TouchableOpacity onPress={takePicture}>
-                  <Ionicons name="camera" size={36} color="white" />
-                </TouchableOpacity>
-              </BlurView>
-            </View>
-          </View>
-        </CameraView>
-      ) : (
-        <View style={styles.imageContainer}>
-          <Image source={{ uri: image }} style={styles.image} />
-          <View style={styles.imageControls}>
-            <BlurView intensity={80} tint="dark" style={styles.imageButtonBlur}>
-              <TouchableOpacity onPress={() => setImage(null)} style={styles.imageButton}>
-                <Ionicons name="refresh" size={24} color="white" />
-                <Text style={styles.buttonText}>Retake</Text>
+              <TouchableOpacity onPress={toggleCameraFacing} style={styles.controlButton}>
+                <Ionicons name="camera-reverse" size={24} color="white" />
               </TouchableOpacity>
-            </BlurView>
-            <BlurView intensity={80} tint="dark" style={styles.imageButtonBlur}>
-              <Link href={{ pathname: "/(tabs)/scan", params: { photoUri: image } }} asChild>
-                <TouchableOpacity style={styles.imageButton}>
-                  <Ionicons name="save" size={24} color="white" />
-                  <Text style={styles.buttonText}>Save</Text>
-                </TouchableOpacity>
-              </Link>
-            </BlurView>
-          </View>
+              <TouchableOpacity onPress={takePicture} style={styles.captureButton}>
+                <Ionicons name="camera" size={36} color="white" />
+              </TouchableOpacity>
+              <TouchableOpacity onPress={toggleFlash} style={styles.controlButton}>
+                <Ionicons name={flash === 'on' ? "flash" : "flash-off"} size={24} color="white" />
+              </TouchableOpacity>
+            </View>
+          </BlurView>
         </View>
-      )}
+      </CameraView>
     </View>
   );
 }
-
 
 const styles = StyleSheet.create({
   container: {
@@ -121,8 +125,12 @@ const styles = StyleSheet.create({
   topControls: {
     flexDirection: 'row',
     justifyContent: 'space-between',
+    alignItems: 'center',
+    width: '100%',
   },
   bottomControls: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
     alignItems: 'center',
   },
   buttonBlur: {
@@ -150,10 +158,7 @@ const styles = StyleSheet.create({
   imageControls: {
     flexDirection: 'row',
     justifyContent: 'space-around',
-    position: 'absolute',
-    bottom: 30,
-    left: 0,
-    right: 0,
+    alignItems: 'center',
   },
   imageButtonBlur: {
     borderRadius: 25,
@@ -166,6 +171,8 @@ const styles = StyleSheet.create({
   imageButton: {
     flexDirection: 'row',
     alignItems: 'center',
+    padding: 10,
+    borderRadius: 25,
   },
   buttonText: {
     color: 'white',
@@ -177,5 +184,83 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  bottomControlsBlur: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    height: 100,
+    justifyContent: 'center',
+  },
+  controlButton: {
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  captureButton: {
+    width: 70,
+    height: 70,
+    borderRadius: 35,
+    backgroundColor: 'rgba(255, 255, 255, 0.3)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  imageControlsBlur: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    height: 100,
+    justifyContent: 'center',
+  },
+  imageCounter: {
+    color: 'white',
+    fontSize: 18,
+    fontWeight: 'bold',
+    padding: 10,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    borderRadius: 15,
+    position: 'absolute',
+    top: 20,
+    alignSelf: 'center',
+  },
+  placeholderContainer: {
+    position: 'absolute',
+    top: '5%',
+    left: 0,
+    right: 0,
+    alignItems: 'center',
+    zIndex: 10,
+  },
+  placeholderText: {
+    color: 'white',
+    fontSize: 20,
+    fontWeight: 'bold',
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    padding: 10,
+    borderRadius: 10,
+    textAlign: 'center',
+    width: '80%',
+  },
+  skipButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(0, 0, 0, 0.8)',
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    borderRadius: 18,
+    position: 'absolute',
+    bottom: 110,
+    alignSelf: 'center',
+  },
+  skipButtonText: {
+    color: 'white',
+    fontSize: 14,
+    fontWeight: 'bold',
+    marginRight: 4,
   },
 });

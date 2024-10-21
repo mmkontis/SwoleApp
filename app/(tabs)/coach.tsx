@@ -16,9 +16,10 @@ export default function CoachScreen() {
   const router = useRouter();
 
   const handleTopicPress = (topic: string) => {
+    const initialMessage = `~~${topic}~~`;
     router.push({
       pathname: '/chat',
-      params: { topic },
+      params: { initialMessage: encodeURIComponent(initialMessage) },
     });
   };
 

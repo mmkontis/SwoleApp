@@ -42,10 +42,10 @@ const OnboardingScreen: React.FC = () => {
 
   const handleFinish = () => {
     try {
-      router.replace('/(tabs)/daily');
+      router.push('/(tabs)');
     } catch (error) {
       console.error('Navigation error:', error);
-      Alert.alert('Navigation Error', 'Unable to navigate to the daily screen. Please try again.');
+      Alert.alert('Navigation Error', 'Unable to navigate to the main screen. Please try again.');
     }
   };
 

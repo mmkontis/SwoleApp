@@ -1,10 +1,11 @@
+import * as ImageManipulator from 'expo-image-manipulator';
 import * as ImagePicker from 'expo-image-picker';
 import React, { useState } from 'react';
 import { Button, Image, StyleSheet, Text, View } from 'react-native';
 import { useAuth } from '../../contexts/AuthContext';
-import { uploadImage } from '../../lib/supabase-functions';
+import { updateDayWithImage, uploadImage } from '../../lib/supabase-functions';
 
-export default function TestScreen() {
+export default function PicTestScreen() {
   const [image, setImage] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
   const { user } = useAuth();
@@ -18,7 +19,18 @@ export default function TestScreen() {
     });
 
     if (!result.canceled) {
-      setImage(result.assets[0].uri);
+      // Compress the image
+      const manipResult = await ImageManipulator.manipulateAsync(
+        result.assets[0].uri,
+        [
+            
+        ], // Resize to width of 1000px, height will adjust automatically
+        { 
+          compress: 0.6, // 0 = max compression (lowest quality), 1 = no compression (highest quality)
+          format: ImageManipulator.SaveFormat.JPEG 
+        }
+      );
+      setImage(manipResult.uri);
     }
   };
 
@@ -29,10 +41,18 @@ export default function TestScreen() {
     try {
       const publicUrl = await uploadImage(user.id, image, 'TEST');
       console.log('Image uploaded successfully:', publicUrl);
-      alert('Image uploaded successfully!');
+
+      // Get the current date
+      const currentDate = new Date();
+      const formattedDate = currentDate.toISOString().split('T')[0];
+      // Update the day's entry with the image URL
+      await updateDayWithImage(formattedDate, 'fullbody', publicUrl as string);
+
+      console.log('Day updated with image URL');
+      alert('Image uploaded and day updated successfully!');
     } catch (error) {
-      console.error('Error uploading image:', error);
-      alert('Failed to upload image');
+      console.error('Error uploading image or updating day:', error);
+      alert('Failed to upload image or update day');
     } finally {
       setUploading(false);
     }
@@ -40,7 +60,7 @@ export default function TestScreen() {
 
   return (
     <View style={styles.container}>
-      <Text style={styles.title}>Test Upload Screen</Text>
+      <Text style={styles.title}>Pic Test Upload Screen</Text>
       <Button title="Pick an image from camera roll" onPress={pickImage} />
       {image && <Image source={{ uri: image }} style={styles.image} />}
       <Button
@@ -71,4 +91,3 @@ const styles = StyleSheet.create({
     marginVertical: 20,
   },
 });
-
