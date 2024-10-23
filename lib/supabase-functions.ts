@@ -32,7 +32,7 @@ export const checkDayExists = async (date: Date, userId: string): Promise<boolea
     .from('days')
     .select('id')
     .eq('created_at', date.toISOString().split('T')[0])
-    .eq('user_data_id', userId)
+    .eq('user_id', userId)
     .single();
 
   if (error && error.code !== 'PGRST116') {
@@ -51,7 +51,7 @@ export const createDay = async (date: Date, userId: string) => {
     .from('days')
     .select('*')
     .eq('created_at', dateString)
-    .eq('user_data_id', userId)
+    .eq('user_id', userId)
     .single();
 
   if (checkError && checkError.code !== 'PGRST116') {
@@ -66,7 +66,7 @@ export const createDay = async (date: Date, userId: string) => {
   // If the day doesn't exist, create a new one
   const { data: newDay, error: insertError } = await supabase
     .from('days')
-    .insert({ created_at: dateString, user_data_id: userId })
+    .insert({ created_at: dateString, user_id: userId })
     .select()
     .single();
 
@@ -121,7 +121,7 @@ export const checkAdjacentDays = async (date: Date) => {
 };
 
 // Message Management
-export async function uploadMessage({ content, role, user_data_id }: { content: string; role: 'user' | 'ai'; user_data_id: string }) {
+export async function uploadMessage({ content, role, user_id }: { content: string; role: 'user' | 'ai'; user_id: string }) {
   try {
     const { data, error } = await supabase
       .from('messages')
@@ -129,7 +129,7 @@ export async function uploadMessage({ content, role, user_data_id }: { content: 
         {
           content,
           role,
-          user_data_id,
+          user_id,
           created_at: new Date().toISOString(),
         },
       ]);
@@ -146,7 +146,7 @@ export async function fetchMessages(userId: string, page: number, perPage: numbe
   const { data, error } = await supabase
     .from('messages')
     .select('*')
-    .eq('user_data_id', userId)
+    .eq('user_id', userId)
     .order('created_at', { ascending: false })
     .range(page * perPage, (page + 1) * perPage - 1);
 
@@ -178,7 +178,15 @@ export async function uploadImage(userId: string, imageUri: string, scanType: st
       reader.onload = async () => {
         const base64 = reader.result as string;
         const base64Data = base64.split(',')[1];
-        const fileName = `pic_${scanType.toLowerCase()}_${Date.now()}.jpg`;
+        
+        // Generate the date string in dd_mm_yyyy format
+        const date = new Date();
+        const day = String(date.getDate()).padStart(2, '0');
+        const month = String(date.getMonth() + 1).padStart(2, '0');
+        const year = date.getFullYear();
+        const dateString = `${day}_${month}_${year}`;
+        
+        const fileName = `pic_${scanType.toLowerCase()}_${dateString}.jpg`;
         const filePath = `${userId}/${fileName}`;
 
         console.log('Preparing to upload to Supabase storage...', { fileName, filePath });
@@ -226,4 +234,66 @@ export async function updateDayWithImage(date: string, scanType: string, imageUr
   }
 
   return data;
+}
+
+// Add this function to fetch day data
+export async function getDayData(date: string, userId: string) {
+  const { data, error } = await supabase
+    .from('days')
+    .select('*')
+    .eq('created_at', date)
+    .eq('user_id', userId)
+    .single();
+
+  if (error) {
+    console.error('Error fetching day data:', error);
+    return null;
+  }
+
+  return data;
+}
+
+export async function prefetchRecentDays(userId: string) {
+  const today = new Date();
+  const yesterday = new Date(today);
+  yesterday.setDate(yesterday.getDate() - 1);
+  const twoDaysAgo = new Date(today);
+  twoDaysAgo.setDate(twoDaysAgo.getDate() - 2);
+
+  const dates = [today, yesterday, twoDaysAgo].map(date => date.toISOString().split('T')[0]);
+
+  const { data, error } = await supabase
+    .from('days')
+    .select('*')
+    .eq('user_id', userId)
+    .in('created_at', dates)
+    .order('created_at', { ascending: false });
+
+  if (error) {
+    console.error('Error prefetching recent days:', error);
+    return null;
+  }
+
+  // Create days that don't exist
+  const existingDates = data.map(day => day.created_at);
+  const missingDates = dates.filter(date => !existingDates.includes(date));
+
+  for (const date of missingDates) {
+    await createDay(new Date(date), userId);
+  }
+
+  // Fetch again to include newly created days
+  const { data: updatedData, error: updatedError } = await supabase
+    .from('days')
+    .select('*')
+    .eq('user_id', userId)
+    .in('created_at', dates)
+    .order('created_at', { ascending: false });
+
+  if (updatedError) {
+    console.error('Error fetching updated recent days:', updatedError);
+    return null;
+  }
+
+  return updatedData;
 }

@@ -1,100 +1,137 @@
-import React, { useEffect } from 'react';
-import { Dimensions, StyleSheet, View } from 'react-native';
-import { PanGestureHandler } from 'react-native-gesture-handler';
-import Animated, {
-    Extrapolate,
-    interpolate,
-    runOnJS,
-    useAnimatedGestureHandler,
-    useAnimatedStyle,
-    useSharedValue,
-    withSpring,
-} from 'react-native-reanimated';
+import React, { useEffect, useState } from 'react';
+import { Animated, Modal, StatusBar, StyleSheet, TouchableOpacity, View } from 'react-native';
 
-const { height: SCREEN_HEIGHT } = Dimensions.get('window');
-const MAX_TRANSLATE_Y = -SCREEN_HEIGHT + 50;
-
-type BottomSheetProps = {
+interface BottomSheetProps {
   isVisible: boolean;
   onClose: () => void;
   children: React.ReactNode;
-};
+}
 
-const BottomSheet: React.FC<BottomSheetProps> = ({ isVisible, onClose, children }) => {
-  const translateY = useSharedValue(0);
-
-  const scrollTo = (destination: number) => {
-    'worklet';
-    translateY.value = withSpring(destination, { damping: 50 });
-  };
+export default function BottomSheet({ isVisible, onClose, children }: BottomSheetProps) {
+  const [fadeAnim] = useState(new Animated.Value(0));
+  const [slideAnim] = useState(new Animated.Value(100));
 
   useEffect(() => {
     if (isVisible) {
-      scrollTo(MAX_TRANSLATE_Y);
+      StatusBar.setBarStyle('light-content');
+      Animated.parallel([
+        Animated.timing(fadeAnim, {
+          toValue: 1,
+          duration: 200,
+          useNativeDriver: true,
+        }),
+        Animated.timing(slideAnim, {
+          toValue: 0,
+          duration: 200,
+          useNativeDriver: true,
+        })
+      ]).start();
     } else {
-      scrollTo(0);
+      Animated.parallel([
+        Animated.timing(fadeAnim, {
+          toValue: 0,
+          duration: 200,
+          useNativeDriver: true,
+        }),
+        Animated.timing(slideAnim, {
+          toValue: 100,
+          duration: 200,
+          useNativeDriver: true,
+        })
+      ]).start();
     }
+
+    return () => {
+      StatusBar.setBarStyle('light-content');
+    };
   }, [isVisible]);
 
-  const gestureHandler = useAnimatedGestureHandler({
-    onStart: (_, ctx: { startY: number }) => {
-      ctx.startY = translateY.value;
-    },
-    onActive: (event, ctx: { startY: number }) => {
-      translateY.value = ctx.startY + event.translationY;
-    },
-    onEnd: () => {
-      if (translateY.value > -SCREEN_HEIGHT / 3) {
-        scrollTo(0);
-        runOnJS(setTimeout)(onClose, 300); // Add a delay before calling onClose
-      } else {
-        scrollTo(MAX_TRANSLATE_Y);
-      }
-    },
-  });
-
-  const rBottomSheetStyle = useAnimatedStyle(() => {
-    const borderRadius = interpolate(
-      translateY.value,
-      [MAX_TRANSLATE_Y + 50, MAX_TRANSLATE_Y],
-      [25, 5],
-      Extrapolate.CLAMP
-    );
-
-    return {
-      borderRadius,
-      transform: [{ translateY: translateY.value }],
-    };
-  });
-
   return (
-    <PanGestureHandler onGestureEvent={gestureHandler}>
-      <Animated.View style={[styles.bottomSheetContainer, rBottomSheetStyle]}>
-        <View style={styles.line} />
-        {React.isValidElement(children) ? React.cloneElement(children as React.ReactElement, { onClose }) : children}
-      </Animated.View>
-    </PanGestureHandler>
+    <Modal
+      visible={isVisible}
+      transparent={true}
+      animationType="none"
+      onRequestClose={onClose}
+      statusBarTranslucent={true}
+      hardwareAccelerated={true}
+      presentationStyle="overFullScreen"
+    >
+      <View style={styles.modalContainer}>
+        <StatusBar barStyle="light-content" backgroundColor="transparent" translucent />
+        <Animated.View 
+          style={[
+            styles.overlay,
+            { opacity: fadeAnim }
+          ]}
+        >
+          <TouchableOpacity 
+            style={styles.overlayTouch}
+            activeOpacity={1}
+            onPress={onClose}
+          />
+        </Animated.View>
+        
+        <Animated.View 
+          style={[
+            styles.bottomSheetContainer,
+            {
+              transform: [{
+                translateY: slideAnim.interpolate({
+                  inputRange: [0, 100],
+                  outputRange: [0, 200]
+                })
+              }]
+            }
+          ]}
+        >
+          <TouchableOpacity 
+            activeOpacity={1} 
+            onPress={e => e.stopPropagation()}
+          >
+            <View style={styles.content}>
+              <View style={styles.handle} />
+              {children}
+            </View>
+          </TouchableOpacity>
+        </Animated.View>
+      </View>
+    </Modal>
   );
-};
+}
 
 const styles = StyleSheet.create({
+  modalContainer: {
+    flex: 1,
+    backgroundColor: 'transparent',
+    justifyContent: 'flex-end',
+  },
+  overlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+  },
+  overlayTouch: {
+    flex: 1,
+  },
   bottomSheetContainer: {
-    height: SCREEN_HEIGHT,
     width: '100%',
     backgroundColor: '#1A1A1A',
-    position: 'absolute',
-    top: SCREEN_HEIGHT,
-    borderRadius: 25,
-    zIndex: 2,
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    marginTop: 'auto',
   },
-  line: {
-    width: 75,
+  content: {
+    backgroundColor: '#1A1A1A',
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    paddingTop: 8,
+    paddingBottom: 30,
+  },
+  handle: {
+    width: 40,
     height: 4,
-    backgroundColor: 'grey',
-    alignSelf: 'center',
-    marginVertical: 15,
+    backgroundColor: '#666',
     borderRadius: 2,
+    marginBottom: 8,
+    alignSelf: 'center',
   },
 });
-
-export default BottomSheet;

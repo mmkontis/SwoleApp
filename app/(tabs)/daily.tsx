@@ -1,42 +1,41 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
-import { Session } from '@supabase/supabase-js';
+import * as ImagePicker from 'expo-image-picker';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Link, useRouter } from 'expo-router';
-import React, { useEffect, useMemo, useState } from 'react';
-import { Button, Dimensions, Image, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import { LineChart } from 'react-native-chart-kit';
+import React, { useMemo, useRef, useState } from 'react';
+import { Alert, Animated, Button, Dimensions, Easing, Image, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import BottomSheet from '../../components/BottomSheet';
-import { supabase } from '../../lib/supabase';
 import {
-  checkAdjacentDays,
-  checkDayExists,
-  createDay,
-  formatDate,
-  getDayId,
-  getSession
+  formatDate
 } from '../../lib/supabase-functions';
+import { DayData, useDaysStore } from '../../lib/useDaysStore';
+import { calculateAverageBodyFat, calculateTotalScore } from '../../lib/utils';
+import MetricDetailBottomSheet from '../components/MetricDetailBottomSheet';
+import metricsData from '../data/metrics.json';
 
-const goalData = {
-  arms: { score: 85, explanation: "Well-defined and muscular arms." },
-  chest: { score: 80, explanation: "Good chest definition, though can be fuller." },
-  abs: { score: 90, explanation: "Excellent abdominal definition and low body fat." },
-  legs: { score: 75, explanation: "Strong, but could use more definition." },
-  back: { score: null, explanation: "Not visible." },
-  fat: { score: 90, explanation: "Low body fat percentage." },
-  potential: { score: 85, explanation: "High potential for further development." },
-  genetics: { score: 80, explanation: "Good genetics evident in muscle shape and low fat." },
-  wellbeing: { score: 85, explanation: "Appears healthy and fit." },
-  symmetry: { score: 80, explanation: "Good symmetry between different body parts." },
-  muscleDefinition: { score: 90, explanation: "Excellent muscle definition overall." },
-  posture: { score: 85, explanation: "Good posture visible." },
-  flexibility: { score: null, explanation: "Not visible." },
-  proportions: { score: 80, explanation: "Good proportions, could improve leg-to-upper-body ratio." },
-  vascularity: { score: 85, explanation: "Visible vascularity indicating low body fat." },
-  muscleMass: { score: 80, explanation: "Good muscle mass, but room for growth in some areas." },
-  bodyComposition: { score: 90, explanation: "Excellent body composition with lean muscle." },
+// Add type definition for the metrics data
+type MetricItem = {
+  score?: number;
+  explanation: string;
+  tips?: string[];
+  percentage?: number;
+  monthsNumber?: number;
+  age?: number;
 };
+
+type MetricsData = {
+  [key: string]: MetricItem;
+} & {
+  improvementSuggestions: Array<{
+    suggestion: string;
+    explanation: string;
+  }>;
+};
+
+// Cast the imported JSON to our type
+const goalData = metricsData as unknown as MetricsData;
 
 const windowWidth = Dimensions.get('window').width;
 const boxWidth = (windowWidth - 60) / 2; // 60 is the total horizontal padding
@@ -47,6 +46,10 @@ type Metric = {
   value: {
     score: number | null;
     explanation: string;
+    tips?: string[];
+    percentage?: number;
+    monthsNumber?: number;
+    age?: number;
   };
 };
 
@@ -71,38 +74,169 @@ const mockChartData = {
   ],
 };
 
+// Update the type definitions at the top of the file
+type MetricValue = {
+  score?: number | null;
+  explanation?: string;
+  tips?: string[];
+  percentage?: number | null;
+  monthsNumber?: number | null;
+  age?: number | null;
+  generalScore?: number | null;
+  bodyFatPercentage?: number | null;
+  // Add any other metric properties that might be in your progress_json
+};
+
+// Update the FullBodyMetrics type to properly handle the index signature and improvementSuggestions
+type FullBodyMetrics = {
+  [key: string]: MetricValue;
+} & {
+  improvementSuggestions?: Array<{ suggestion: string; explanation: string; }>;
+};
+
+type ProgressJson = {
+  fullbody: FullBodyMetrics;
+};
+
+// Update or add these type definitions
+type BodyPart = {
+  generalScore: number;
+  bodyFatPercentage: number;
+  explanation: string;
+};
+
+type ScanData = {
+  [key: string]: {
+    [bodyPart: string]: BodyPart;
+  };
+};
+
+// Update the type definitions
+type BodyPartData = {
+  generalScore: number;
+  bodyFatPercentage: number;
+  explanation: string;
+};
+
+type ScanType = {
+  [key: string]: BodyPartData;
+};
+
+// Helper function to identify score-based metrics
+const isScoreMetric = (key: string): boolean => {
+  const scoreMetrics = [
+    'abs', 'arms', 'chest', 'genetics', 'muscleDefinition',
+    'muscleMass', 'posture', 'potential', 'proportions',
+    'symmetry', 'vascularity', 'wellbeing'
+  ];
+  return scoreMetrics.includes(key);
+};
+
+// Add this helper function at the top level
+const getLatestFullBodyImage = (progressJson: DayData['progress_json'] | null): string | null => {
+  if (!progressJson?.fullbody?.details) return null;
+  return progressJson.fullbody.imagePath || null;
+};
+
+// Add this helper function to get routine tips
+const getRoutineTips = (progressJson: DayData['progress_json'] | null): JSX.Element => {
+  if (!progressJson?.fullbody?.details) {
+    return (
+      <Text style={styles.routineText}>
+        Scan to get your daily glow up routine
+      </Text>
+    );
+  }
+
+  const details = progressJson.fullbody.details;
+  const suggestions = details.improvementSuggestions || [];
+  const topTips = suggestions.slice(0, 3);
+
+  return (
+    <View style={styles.routineTipsContainer}>
+      <Text style={styles.routineHeader}>Today's Focus:</Text>
+      {topTips.map((tip, index) => (
+        <View key={index} style={styles.tipItem}>
+          <View style={styles.tipBullet}>
+            <Text style={styles.tipNumber}>{index + 1}</Text>
+          </View>
+          <View style={styles.tipContent}>
+            <Text style={styles.tipTitle}>{tip.suggestion}</Text>
+            <Text style={styles.tipExplanation}>{tip.explanation}</Text>
+          </View>
+        </View>
+      ))}
+      {topTips.length === 0 && (
+        <Text style={styles.routineText}>
+          Scan to get your daily glow up routine
+        </Text>
+      )}
+    </View>
+  );
+};
+
+// Add this helper function to refresh image URLs
+const refreshImage = (uri: string) => {
+  if (!uri) return '';
+  return `${uri}?timestamp=${Date.now()}&random=${Math.random()}`;
+};
+
 export default function DailyScreen() {
   const navigation = useNavigation<NavigationProp>();
   const router = useRouter(); // Added router
   const [isBottomSheetVisible, setBottomSheetVisible] = useState(false);
   const [selectedMetric, setSelectedMetric] = useState<Metric | null>(null);
-  const [currentDate, setCurrentDate] = useState(new Date());
-  const [session, setSession] = useState<Session | null>(null);
-  const [dayId, setDayId] = useState<string | null>(null);
-  const [hasPreviousDay, setHasPreviousDay] = useState(false);
-  const [hasNextDay, setHasNextDay] = useState(false);
-  const [dayData, setDayData] = useState<{ id: string, created_at: string } | null>(null);
+  const [sortOption, setSortOption] = useState<SortOption>('alphabetical');
+
+  const {
+    currentDate,
+    dayData,
+    dayId,
+    hasPreviousDay,
+    hasNextDay,
+    loading,
+    error,
+    fetchOrCreateDayData,
+    handleDateChange,
+    createTodayDay,
+    refreshCurrentDay,
+  } = useDaysStore();
 
   const goalEntries = Object.entries(goalData);
-  const [sortOption, setSortOption] = useState<SortOption>('alphabetical');
 
   const sortedGoalEntries = useMemo(() => {
     return Object.entries(goalData).sort((a, b) => {
+      if (a[0] === 'improvementSuggestions' || b[0] === 'improvementSuggestions') {
+        return 0; // Don't sort improvementSuggestions
+      }
       if (sortOption === 'alphabetical') {
         return a[0].localeCompare(b[0]);
       } else {
-        return (b[1].score || 0) - (a[1].score || 0);
+        const aScore = 'score' in a[1] ? a[1].score : 0;
+        const bScore = 'score' in b[1] ? b[1].score : 0;
+        return (bScore || 0) - (aScore || 0);
       }
     });
   }, [goalData, sortOption]);
 
-  const handleOpenBottomSheet = (metric: Metric | 'settings') => {
-    if (metric === 'settings') {
+  const handleOpenBottomSheet = (key: string, value: any) => {
+    if (key === 'settings') {
       // Handle settings
-    } else {
-      setSelectedMetric(metric);
-      setBottomSheetVisible(true);
+      return;
     }
+    
+    // Transform the data to match the expected Metric type
+    const metricData = {
+      key: key,
+      value: {
+        score: value.score || value.percentage || null,
+        explanation: value.explanation || '',
+        tips: value.tips || []
+      }
+    };
+
+    setSelectedMetric(metricData);
+    setBottomSheetVisible(true);
   };
 
   const handleCloseBottomSheet = () => {
@@ -113,123 +247,115 @@ export default function DailyScreen() {
     setSortOption(prev => prev === 'alphabetical' ? 'score' : 'alphabetical');
   };
 
-  const handleDateChange = async (direction: 'prev' | 'next') => {
-    const newDate = new Date(currentDate);
-    if (direction === 'prev') {
-      newDate.setDate(newDate.getDate() - 1);
-    } else {
-      newDate.setDate(newDate.getDate() + 1);
+  // Update the renderMetrics function to show all metrics
+  const renderMetrics = () => {
+    if (!dayData?.progress_json) {
+      return <Text style={styles.noDataText}>No metrics data available for this date.</Text>;
     }
-    setCurrentDate(newDate);
 
-    await fetchOrCreateDayData(newDate);
-    const { hasPreviousDay, hasNextDay } = await checkAdjacentDays(newDate);
-    setHasPreviousDay(hasPreviousDay);
-    setHasNextDay(hasNextDay);
+    const progressJson = dayData.progress_json;
+    
+    return Object.entries(progressJson).flatMap(([scanType, scanData]) => {
+      if (!scanData?.details || typeof scanData.details !== 'object') return null;
+
+      // Get all metrics from details
+      return Object.entries(scanData.details)
+        .filter(([key]) => key !== 'improvementSuggestions') // Filter out non-metric data
+        .map(([metricName, metricData]) => {
+          if (!metricData || typeof metricData !== 'object') return null;
+
+          // Handle different types of metrics
+          let displayValue: string | number = '-';
+          let progressValue: number | null = null;
+
+          if ('score' in metricData && typeof metricData.score === 'number') {
+            displayValue = metricData.score;
+            progressValue = metricData.score;
+          } else if ('percentage' in metricData && typeof metricData.percentage === 'number') {
+            displayValue = `${metricData.percentage}%`;
+            progressValue = metricData.percentage;
+          } else if ('age' in metricData && typeof metricData.age === 'number') {
+            displayValue = `${metricData.age} years`;
+            progressValue = null;
+          } else if ('monthsNumber' in metricData && typeof metricData.monthsNumber === 'number') {
+            displayValue = `${metricData.monthsNumber} months`;
+            progressValue = null;
+          }
+
+          return (
+            <TouchableOpacity
+              key={`${scanType}-${metricName}`}
+              style={styles.metricItem}
+              onPress={() => handleOpenBottomSheet(metricName, metricData)}
+            >
+              <Text style={styles.metricTitle}>
+                {metricName.replace(/([A-Z])/g, ' $1').toLowerCase()}
+              </Text>
+              <Text style={styles.metricScore}>
+                {displayValue}
+              </Text>
+              {progressValue !== null && (
+                <View style={styles.progressBarContainer}>
+                  <View 
+                    style={[
+                      styles.progressBar, 
+                      { width: `${Math.min(100, progressValue)}%` }
+                    ]} 
+                  />
+                </View>
+              )}
+              <Text style={styles.metricExplanation}>
+                {metricData.explanation || 'No explanation available'}
+              </Text>
+            </TouchableOpacity>
+          );
+        });
+    }).filter(Boolean);
   };
 
-  const fetchOrCreateDayData = async (date: Date) => {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (user) {
-      const newDayData = await createDay(date, user.id);
-      if (newDayData) {
-        setDayData(newDayData);
-        setDayId(newDayData.id);
-      } else {
-        console.error('Failed to fetch or create day data');
-        setDayData(null);
-        setDayId(null);
-      }
-    } else {
-      console.error('User not authenticated');
-      setDayData(null);
-      setDayId(null);
-    }
+  // Add animation values
+  const flipAnimation = useRef(new Animated.Value(0)).current;
+  const scaleAnimation = useRef(new Animated.Value(1)).current;
+
+  // Update the animation configuration
+  const handleImageFlip = () => {
+    // Reset animations to initial values
+    flipAnimation.setValue(0);
+    scaleAnimation.setValue(1);
+
+    Animated.parallel([
+      // Flip animation
+      Animated.timing(flipAnimation, {
+        toValue: 1,
+        duration: 1000,
+        easing: Easing.inOut(Easing.ease),
+        useNativeDriver: true,
+      }),
+      // Scale animation sequence
+      Animated.sequence([
+        // Scale up during first half
+        Animated.timing(scaleAnimation, {
+          toValue: 1.2,
+          duration: 500,
+          easing: Easing.inOut(Easing.ease),
+          useNativeDriver: true,
+        }),
+        // Scale down during second half
+        Animated.timing(scaleAnimation, {
+          toValue: 1,
+          duration: 500,
+          easing: Easing.inOut(Easing.ease),
+          useNativeDriver: true,
+        }),
+      ]),
+    ]).start();
   };
 
-  const checkAndFetchDayData = async (date: Date) => {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (user) {
-      const dayExists = await checkDayExists(date, user.id);
-      if (dayExists) {
-        const fetchedDayData = await getDayId(date);
-        if (fetchedDayData) {
-          setDayData(fetchedDayData);
-          setDayId(fetchedDayData.id);
-        }
-      } else {
-        setDayData(null);
-        setDayId(null);
-      }
-    } else {
-      console.error('User not authenticated');
-    }
-  };
-
-  const createTodayDay = async () => {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (user) {
-      const today = new Date();
-      const newDayData = await createDay(today, user.id);
-      if (newDayData) {
-        setDayData(newDayData);
-        setDayId(newDayData.id);
-        setCurrentDate(today);
-        const { hasPreviousDay, hasNextDay } = await checkAdjacentDays(today);
-        setHasPreviousDay(hasPreviousDay);
-        setHasNextDay(hasNextDay);
-      }
-    } else {
-      console.error('User not authenticated');
-    }
-  };
-
-  useEffect(() => {
-    const fetchSession = async () => {
-      const fetchedSession = await getSession();
-      setSession(fetchedSession);
-    };
-
-    fetchSession();
-  }, []);
-
-  useEffect(() => {
-    fetchOrCreateDayData(currentDate);
-  }, [currentDate]);
-
-  useEffect(() => {
-    const checkSessionAndDay = async () => {
-      const fetchedSession = await getSession();
-      setSession(fetchedSession);
-
-      if (fetchedSession?.user.id) {
-        const today = new Date();
-        await fetchOrCreateDayData(today);
-        const { hasPreviousDay, hasNextDay } = await checkAdjacentDays(today);
-        setHasPreviousDay(hasPreviousDay);
-        setHasNextDay(hasNextDay);
-      }
-    };
-
-    checkSessionAndDay();
-  }, []);
-
-  useEffect(() => {
-    checkAdjacentDays(currentDate);
-  }, [currentDate]);
-
-  useEffect(() => {
-    const fetchData = async () => {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (user) {
-        await checkAndFetchDayData(currentDate);
-      } else {
-        console.error('User not authenticated');
-      }
-    };
-
-    fetchData();
-  }, [currentDate]);
+  // Create interpolated values for the flip
+  const spin = flipAnimation.interpolate({
+    inputRange: [0, 0.5, 1],
+    outputRange: ['0deg', '180deg', '360deg'],
+  });
 
   return (
     <View style={styles.container}>
@@ -243,7 +369,7 @@ export default function DailyScreen() {
           </View>
           <TouchableOpacity
             style={styles.settingsButton}
-            onPress={() => handleOpenBottomSheet('settings')}
+            onPress={() => router.push("/fullscreen/settings")}
           >
             <Ionicons name="settings-outline" size={24} color="white" />
           </TouchableOpacity>
@@ -253,27 +379,108 @@ export default function DailyScreen() {
           colors={['#8A2BE2', '#9400D3']}
           style={styles.progressCard}
         >
-          <Text style={styles.progressTitle}>Your progress</Text>
-          <TouchableOpacity style={styles.viewButton}>
-            <Text style={styles.viewButtonText}>View</Text>
-          </TouchableOpacity>
-          <Image
-            source={{ uri: 'https://via.placeholder.com/100' }}
-            style={styles.profileImage}
-          />
+          <View style={styles.progressHeaderRow}>
+            <Text style={styles.progressTitle}>Your Stats</Text>
+            <Link href="/fullscreen/social-share" asChild>
+              <TouchableOpacity style={styles.shareButton}>
+                <Ionicons name="share-social-outline" size={24} color="white" />
+              </TouchableOpacity>
+            </Link>
+          </View>
+          <View style={styles.statsContainer}>
+            <View style={styles.statItem}>
+              <Text style={styles.statLabel}>Total Score</Text>
+              <Text style={styles.statValue}>
+                {calculateTotalScore(dayData?.progress_json ?? null) || '-'}
+              </Text>
+            </View>
+            <View style={styles.statItem}>
+              <Text style={styles.statLabel}>Body Fat</Text>
+              <Text style={styles.statValue}>
+                {calculateAverageBodyFat(dayData?.progress_json)}
+              </Text>
+            </View>
+          </View>
+          {dayData?.pic_fullbody ? (
+            <TouchableOpacity 
+              activeOpacity={0.9}
+              onPress={handleImageFlip}
+              style={styles.profileImageContainer}
+            >
+              <Animated.View style={{
+                transform: [
+                  { perspective: 1000 }, // Add perspective
+                  { rotateY: spin },
+                  { scale: scaleAnimation }
+                ],
+              }}>
+                <Image
+                  source={{ 
+                    uri: refreshImage(dayData.pic_fullbody),
+                    cache: 'reload'
+                  }}
+                  style={styles.profileImage}
+                  resizeMode="cover"
+                  onLoadStart={() => {
+                    if (Image.queryCache) {
+                      Image.queryCache([dayData.pic_fullbody]).then(() => {
+                        console.log('Cleared cache for profile image');
+                      });
+                    }
+                  }}
+                  onError={(error) => {
+                    console.error('Error loading profile image:', error);
+                  }}
+                />
+              </Animated.View>
+            </TouchableOpacity>
+          ) : (
+            <Image
+              source={{ uri: 'https://via.placeholder.com/100' }}
+              style={styles.profileImage}
+            />
+          )}
         </LinearGradient>
 
         <Text style={styles.routineTitle}>Your routine</Text>
-        <TouchableOpacity style={styles.routineCard}>
-          <Text style={styles.routineText}>
-            Scan to get your daily glow up routine
-          </Text>
-          <Link href="../CameraScreen" asChild>
-            <TouchableOpacity style={styles.button}>
-              <Text style={styles.buttonText}>Take Photo</Text>
-            </TouchableOpacity>
-          </Link>
-        </TouchableOpacity>
+        <View style={styles.routineCard}>
+          {getRoutineTips(dayData?.progress_json)}
+          <TouchableOpacity 
+            style={styles.button}
+            onPress={async () => {
+              try {
+                const { status } = await ImagePicker.requestCameraPermissionsAsync();
+                if (status !== 'granted') {
+                  Alert.alert('Permission needed', 'Camera permission is required to take photos');
+                  return;
+                }
+
+                const result = await ImagePicker.launchCameraAsync({
+                  quality: 0.7,
+                  base64: true,
+                  exif: false,
+                });
+
+                if (!result.canceled && result.assets && result.assets.length > 0) {
+                  const photo = result.assets[0];
+                  if (photo.uri) {
+                    router.push({
+                      pathname: '/(tabs)/scan',
+                      params: { fullbody: photo.uri }
+                    });
+                  }
+                }
+              } catch (error) {
+                console.error('Error taking picture:', error);
+                Alert.alert('Error', 'Failed to take picture: ' + (error as Error).message);
+              }
+            }}
+          >
+            <Text style={styles.buttonText}>
+              {dayData?.progress_json?.fullbody ? 'Update Scan' : 'Take Photo'}
+            </Text>
+          </TouchableOpacity>
+        </View>
 
         <View style={styles.metricsHeader}>
           <Text style={styles.metricsTitle}>Your Metrics</Text>
@@ -301,29 +508,7 @@ export default function DailyScreen() {
           />
         )}
         <View style={styles.metricsContainer}>
-          {dayData ? (
-            Object.entries(goalData).map(([key, value]) => (
-              <TouchableOpacity
-                key={key}
-                style={styles.metricItem}
-                onPress={() => handleOpenBottomSheet({ key, value })}
-              >
-                <Text style={styles.metricTitle}>{key}</Text>
-                <Text style={styles.metricScore}>{value.score !== null ? value.score : '-'}</Text>
-                <View style={styles.progressBarContainer}>
-                  <View 
-                    style={[
-                      styles.progressBar, 
-                      { width: value.score !== null ? `${value.score}%` : '0%' }
-                    ]} 
-                  />
-                </View>
-                <Text style={styles.metricExplanation}>{value.explanation}</Text>
-              </TouchableOpacity>
-            ))
-          ) : (
-            <Text style={styles.noDataText}>No data available for this date.</Text>
-          )}
+          {renderMetrics()}
         </View>
       </ScrollView>
       <BottomSheet
@@ -331,72 +516,11 @@ export default function DailyScreen() {
         onClose={handleCloseBottomSheet}
       >
         {selectedMetric && (
-          <ScrollView style={styles.metricDetailContainer}>
-            <Text style={styles.metricDetailTitle}>{selectedMetric.key}</Text>
-            <View style={styles.scoreContainer}>
-              <Text style={styles.metricDetailScore}>
-                {selectedMetric.value.score !== null ? selectedMetric.value.score : 'N/A'}
-              </Text>
-              <View style={styles.progressBarWrapper}>
-                <View style={styles.progressBarContainerLarge}>
-                  <LinearGradient
-                    colors={['#8A2BE2', '#9400D3']}
-                    style={[
-                      styles.progressBarLarge,
-                      { width: selectedMetric.value.score !== null ? `${selectedMetric.value.score}%` : '0%' }
-                    ]}
-                  />
-                </View>
-                <View style={styles.progressLabels}>
-                  <Text style={styles.progressLabel}>0</Text>
-                  <Text style={styles.progressLabel}>100</Text>
-                </View>
-              </View>
-            </View>
-            <Text style={styles.metricDetailExplanation}>{selectedMetric.value.explanation}</Text>
-            <Text style={styles.chartTitle}>Progress Over Time</Text>
-            <LineChart
-              data={mockChartData}
-              width={Dimensions.get('window').width - 40} // 40 for padding
-              height={220}
-              yAxisSuffix=""
-              chartConfig={{
-                backgroundColor: '#1A1A1A',
-                backgroundGradientFrom: '#1A1A1A',
-                backgroundGradientTo: '#1A1A1A',
-                decimalPlaces: 0,
-                color: (opacity = 1) => `rgba(138, 43, 226, ${opacity})`,
-                labelColor: (opacity = 1) => `rgba(255, 255, 255, ${opacity})`,
-                style: {
-                  borderRadius: 16,
-                },
-                propsForDots: {
-                  r: '6',
-                  strokeWidth: '2',
-                  stroke: '#9400D3',
-                },
-              }}
-              bezier
-              style={{
-                marginVertical: 8,
-                borderRadius: 16,
-              }}
-            />
-            <View style={styles.tipsContainer}>
-              <Text style={styles.tipsTitle}>Tips</Text>
-              <TouchableOpacity style={styles.tipsCard}>
-                <Text style={styles.tipsText}>
-                  Tap to get personalized tips for improvement
-                </Text>
-                <TouchableOpacity style={styles.tipsButton}>
-                  <Text style={styles.tipsButtonText}>View Tips</Text>
-                </TouchableOpacity>
-              </TouchableOpacity>
-            </View>
-            <TouchableOpacity style={styles.improveButton}>
-              <Text style={styles.improveButtonText}>How to Improve</Text>
-            </TouchableOpacity>
-          </ScrollView>
+          <MetricDetailBottomSheet 
+            selectedMetric={selectedMetric} 
+            mockChartData={mockChartData}
+            onClose={handleCloseBottomSheet}
+          />
         )}
       </BottomSheet>
     </View>
@@ -436,8 +560,9 @@ const styles = StyleSheet.create({
   progressCard: {
     borderRadius: 20,
     padding: 20,
-    height: 150,
+    height: 160,
     marginBottom: 20,
+    overflow: 'hidden',
   },
   progressTitle: {
     fontSize: 24,
@@ -457,12 +582,12 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
   },
   profileImage: {
-    width: 60,
-    height: 60,
-    borderRadius: 30,
-    position: 'absolute',
-    right: 20,
-    bottom: 20,
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    borderWidth: 2,
+    borderColor: 'rgba(255, 255, 255, 0.5)',
+    backfaceVisibility: 'visible',
   },
   routineTitle: {
     fontSize: 24,
@@ -532,12 +657,24 @@ const styles = StyleSheet.create({
   settingsButton: {
     padding: 5,
   },
-  metricDetailContainer: {
-    padding: 20,
+  bottomSheetContent: {
+    flex: 1,
     backgroundColor: '#1A1A1A',
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
-    maxHeight: Dimensions.get('window').height * 0.8, // Limit the height to 80% of screen height
+  },
+  bottomSheetHeader: {
+    padding: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: '#333',
+  },
+  bottomSheetScrollContent: {
+    flex: 1,
+  },
+  bottomSheetFooter: {
+    padding: 20,
+    borderTopWidth: 1,
+    borderTopColor: '#333',
   },
   metricDetailTitle: {
     fontSize: 28,
@@ -549,7 +686,6 @@ const styles = StyleSheet.create({
   scoreContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 20,
   },
   metricDetailScore: {
     fontSize: 36, // Reduced from 48
@@ -586,6 +722,7 @@ const styles = StyleSheet.create({
     color: '#CCCCCC',
     marginBottom: 20,
     lineHeight: 24,
+    paddingHorizontal: 20,
   },
   improveButton: {
     backgroundColor: '#8A2BE2',
@@ -638,10 +775,12 @@ const styles = StyleSheet.create({
     color: 'white',
     marginTop: 20,
     marginBottom: 10,
+    paddingHorizontal: 20,
   },
   tipsContainer: {
     marginTop: 20,
     marginBottom: 20,
+    paddingHorizontal: 20,
   },
   tipsTitle: {
     fontSize: 20,
@@ -675,5 +814,84 @@ const styles = StyleSheet.create({
     color: 'white',
     textAlign: 'center',
     marginTop: 20,
+  },
+  statsContainer: {
+    flexDirection: 'row',
+    justifyContent: 'flex-start', // Changed from space-between
+    marginTop: 10,
+    marginRight: 100, // Keep space for the profile image
+    gap: 40, // Add specific gap between stats
+  },
+  statItem: {
+    alignItems: 'center',
+  },
+  statLabel: {
+    color: 'rgba(255, 255, 255, 0.8)',
+    fontSize: 14,
+    marginBottom: 5,
+  },
+  statValue: {
+    color: 'white',
+    fontSize: 24,
+    fontWeight: 'bold',
+  },
+  routineTipsContainer: {
+    marginBottom: 15,
+  },
+  routineHeader: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: 'white',
+    marginBottom: 15,
+  },
+  tipItem: {
+    flexDirection: 'row',
+    marginBottom: 12,
+    alignItems: 'flex-start',
+  },
+  tipBullet: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: '#8A2BE2',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 10,
+    marginTop: 2,
+  },
+  tipNumber: {
+    color: 'white',
+    fontSize: 14,
+    fontWeight: 'bold',
+  },
+  tipContent: {
+    flex: 1,
+  },
+  tipTitle: {
+    color: 'white',
+    fontSize: 16,
+    fontWeight: 'bold',
+    marginBottom: 4,
+  },
+  tipExplanation: {
+    color: '#CCCCCC',
+    fontSize: 14,
+    lineHeight: 20,
+  },
+  profileImageContainer: {
+    position: 'absolute',
+    right: 20,
+    bottom: 20,
+    width: 80,
+    height: 80,
+  },
+  progressHeaderRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 10,
+  },
+  shareButton: {
+    padding: 5,
   },
 });

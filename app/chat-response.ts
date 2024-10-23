@@ -38,7 +38,7 @@ export async function generateChatResponse(messages: { role: string; content: st
     await uploadMessage({
       content: aiResponse,
       role: 'ai',
-      user_data_id: userId,
+      user_id: userId,
     });
 
     await aiHapticFeedback();
@@ -55,7 +55,7 @@ export async function sendUserMessage(content: string, userId: string): Promise<
     await uploadMessage({
       content,
       role: 'user',
-      user_data_id: userId,
+      user_id: userId,
     });
   } catch (error) {
     console.error('Error uploading user message:', error);

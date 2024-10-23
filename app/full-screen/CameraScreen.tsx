@@ -1,6 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { BlurView } from 'expo-blur';
 import { CameraType, CameraView, FlashMode, useCameraPermissions } from 'expo-camera';
+import * as ImagePicker from 'expo-image-picker';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useRef, useState } from 'react';
 import { Alert, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
@@ -15,8 +16,7 @@ export default function CameraScreen() {
   const cameraRef = useRef<CameraView>(null);
   const router = useRouter();
   const params = useLocalSearchParams();
-  const { scanType, onCapture: onCaptureString } = params as { scanType: string, onCapture: string };
-  const onCapture = onCaptureString ? JSON.parse(onCaptureString) : undefined;
+  const { scanType } = params as { scanType: string };
 
   console.log('CameraScreen rendered', { images, scanType });
 
@@ -44,25 +44,29 @@ export default function CameraScreen() {
   }
 
   const takePicture = async () => {
-    if (cameraRef.current) {
-      try {
-        console.log('Taking picture...');
-        const photo = await cameraRef.current.takePictureAsync();
+    try {
+      const result = await ImagePicker.launchCameraAsync({
+        quality: 0.7,
+        base64: true,
+        exif: false,
+      });
+
+      if (!result.canceled && result.assets && result.assets.length > 0) {
+        const photo = result.assets[0];
         console.log('Picture taken:', photo);
-        if (photo && onCapture && typeof onCapture === 'function') {
-          console.log('Calling onCapture function...');
-          await onCapture(photo.uri);
-          console.log('onCapture function called successfully');
+        if (photo.uri) {
+          router.back();
+          router.setParams({ [scanType]: photo.uri });
         } else {
-          console.error('onCapture is not a function or photo is undefined', { photo, onCapture });
+          console.error('Photo URI is undefined');
+          Alert.alert('Error', 'Failed to capture image: Photo URI is undefined');
         }
-        router.back();
-      } catch (error) {
-        console.error('Error taking picture:', error);
-        Alert.alert('Error', 'Failed to take picture: ' + (error as Error).message);
+      } else {
+        console.log('Camera capture cancelled or no image selected');
       }
-    } else {
-      console.error('Camera ref is null');
+    } catch (error) {
+      console.error('Error taking picture:', error);
+      Alert.alert('Error', 'Failed to take picture: ' + (error as Error).message);
     }
   };
 

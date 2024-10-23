@@ -29,9 +29,18 @@ export default function TabLayout() {
           }}
         >
           <Tabs.Screen
+            name="index"
+            options={{
+              title: 'Tab One',
+              tabBarIcon: ({ color, size }) => (
+                <Ionicons name="checkmark-circle-outline" size={size} color={color} />
+              ),
+            }}
+          />
+          <Tabs.Screen
             name="daily"
             options={{
-              title: 'daily',
+              title: 'Daily',
               tabBarIcon: ({ color, size }) => (
                 <Ionicons name="checkmark-circle-outline" size={size} color={color} />
               ),
@@ -40,7 +49,7 @@ export default function TabLayout() {
           <Tabs.Screen
             name="scan"
             options={{
-              title: 'scan',
+              title: 'Scan',
               tabBarIcon: ({ color, size }) => (
                 <MaterialCommunityIcons name="crop-free" size={size} color={color} />
               ),
@@ -52,15 +61,6 @@ export default function TabLayout() {
               title: 'coach',
               tabBarIcon: ({ color, size }) => (
                 <Ionicons name="chatbubble-ellipses-outline" size={size} color={color} />
-              ),
-            }}
-          />
-          <Tabs.Screen
-            name="pic_test"
-            options={{
-              title: 'Pic Test',
-              tabBarIcon: ({ color, size }) => (
-                <Ionicons name="flask-outline" size={size} color={color} />
               ),
             }}
           />
