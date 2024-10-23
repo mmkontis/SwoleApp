@@ -1,8 +1,8 @@
+import { OPENAI_API_KEY } from '@env';
 import axios from 'axios';
 import * as Haptics from 'expo-haptics';
 import { uploadMessage } from '../lib/supabase-functions';
 
-const API_KEY = 'sk-proj-swSlVBjCcBFln4uLkXqbT3BlbkFJZsnxH0wY8paQAPNh8sG7'; // Replace with your actual API key
 const API_URL = 'https://api.openai.com/v1/chat/completions';
 
 const aiHapticFeedback = async () => {
@@ -27,7 +27,7 @@ export async function generateChatResponse(messages: { role: string; content: st
       },
       {
         headers: {
-          'Authorization': `Bearer ${API_KEY}`,
+          'Authorization': `Bearer ${OPENAI_API_KEY}`,
           'Content-Type': 'application/json',
         },
       }
